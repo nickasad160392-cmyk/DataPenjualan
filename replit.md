@@ -1,36 +1,48 @@
-# [Project name]
+# Dashboard Perumahan Kab. Lumajang
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Dashboard analitik penjualan perumahan subsidi di Kabupaten Lumajang, Jawa Timur — data diambil langsung (scraping) dari portal SIKUMBANG Tapera secara real-time.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/api-server run dev` — run the API server (port 8080)
+- `pnpm --filter @workspace/lumajang-dashboard run dev` — run the frontend dashboard
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
+- API: Express 5 (backend scraper)
+- Frontend: React + Vite + Recharts + shadcn/ui
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
 - Build: esbuild (CJS bundle)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `lib/api-spec/openapi.yaml` — OpenAPI spec (source of truth for API contracts)
+- `artifacts/api-server/src/routes/lumajang.ts` — Backend scraper routes for SIKUMBANG data
+- `artifacts/lumajang-dashboard/src/` — React frontend dashboard
+  - `pages/index.tsx` — Dashboard utama (ringkasan + charts)
+  - `pages/kecamatan.tsx` — Analisis per kecamatan
+  - `pages/developer.tsx` — Data per developer
+  - `pages/listing.tsx` — Daftar listing perumahan
+  - `components/layout.tsx` — Sidebar + header layout
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- **No database** — data di-cache di memory Express dengan TTL 10 menit. Refresh manual via tombol "Refresh Data" atau POST /api/lumajang/refresh
+- **Scraping strategy** — Data kecamatan dari `/grafik-data?kode=3508` (cepat, reliable). Data listing dari scraping HTML pages yang difilter oleh `wilayah.kabupaten === "KAB LUMAJANG"`
+- **SIKUMBANG kode** — Kab. Lumajang = kode `3508`, Provinsi Jawa Timur = `35`
+- Contract-first API: OpenAPI spec → Orval codegen → React Query hooks di frontend
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- **Dashboard** — Ringkasan stok total, terjual, sisa, developer, dengan grafik supply/demand per kecamatan
+- **Analisis Kecamatan** — Perbandingan supply vs peminatan vs pilihan per kecamatan, ranked list
+- **Data Developer** — Tabel developer yang expandable, menampilkan semua lokasi per developer
+- **Listing Perumahan** — Searchable/filterable daftar semua perumahan dengan pagination & detail modal
 
 ## User preferences
 
@@ -38,8 +50,13 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- SIKUMBANG API tidak memiliki endpoint filter kabupaten langsung — listing difilter dari scraping halaman HTML dengan pengecekan `wilayah.kabupaten === "KAB LUMAJANG"` atau `idLokasi.startsWith("LMJ")`
+- Data `jumlahUnit` dari SIKUMBANG sering bernilai `"..."` (belum diisi developer) — handle sebagai null/0
+- `grafik-data` endpoint bisa timeout >15s — gunakan AbortSignal.timeout(15000)
+- Frontend: CSS custom properties semua pakai HSL tanpa wrapper (e.g. `221 83% 53%`)
 
 ## Pointers
 
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- SIKUMBANG API base: `https://sikumbang.tapera.go.id`
+- Key endpoints: `/grafik-data?kode=3508`, `/?page=N` (scraping), `/lokasi-perumahan/{id}/json`

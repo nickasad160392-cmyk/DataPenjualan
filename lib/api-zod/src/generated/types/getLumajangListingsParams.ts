@@ -6,6 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
-}
+export type GetLumajangListingsParams = {
+page?: number;
+limit?: number;
+/**
+ * @nullable
+ */
+kecamatan?: string | null;
+};

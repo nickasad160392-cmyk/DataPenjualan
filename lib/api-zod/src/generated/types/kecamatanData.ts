@@ -6,6 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface KecamatanData {
+  kodeWilayah: string;
+  namaWilayah: string;
+  supply: number;
+  peminatan: number;
+  pilihan: number;
+  sisa: number;
 }

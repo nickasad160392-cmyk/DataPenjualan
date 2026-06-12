@@ -5,7 +5,11 @@
  * API specification for Dashboard Perumahan Lumajang
  * OpenAPI spec version: 0.1.0
  */
+import type { ListingItem } from './listingItem';
 
-export interface HealthStatus {
-  status: string;
+export interface ListingsResponse {
+  data: ListingItem[];
+  total: number;
+  page: number;
+  limit: number;
 }
