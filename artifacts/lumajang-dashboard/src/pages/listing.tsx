@@ -8,6 +8,24 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight, Loader2, Home, MapPin, Building, Info } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
+function proxyFotoUrl(url: string): string {
+  if (!url) return "";
+  return `/api/lumajang/photo-proxy?url=${encodeURIComponent(url)}`;
+}
+
+function FotoItem({ src, alt }: { src: string; alt: string }) {
+  const [errored, setErrored] = useState(false);
+  if (errored) return null;
+  return (
+    <img
+      src={proxyFotoUrl(src)}
+      alt={alt}
+      className="rounded-lg object-cover aspect-video w-full bg-muted"
+      onError={() => setErrored(true)}
+    />
+  );
+}
+
 function ListingDetailModal({ idLokasi, open, onOpenChange }: { idLokasi: string | null, open: boolean, onOpenChange: (o: boolean) => void }) {
   const { data: detail, isLoading } = useGetLumajangListingDetail(idLokasi || "", { 
     query: { 
@@ -18,7 +36,7 @@ function ListingDetailModal({ idLokasi, open, onOpenChange }: { idLokasi: string
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Detail Perumahan</DialogTitle>
           <DialogDescription>Informasi lengkap mengenai lokasi perumahan</DialogDescription>
@@ -51,7 +69,9 @@ function ListingDetailModal({ idLokasi, open, onOpenChange }: { idLokasi: string
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
                   <Home className="h-4 w-4" /> Total Unit
                 </div>
-                <div className="font-semibold">{detail.jumlahUnit || "Tidak ada data"} Unit</div>
+                <div className="font-semibold text-lg">
+                  {detail.jumlahUnit ? `${detail.jumlahUnit} Unit` : "Sedang dimuat..."}
+                </div>
               </div>
             </div>
 
@@ -60,7 +80,7 @@ function ListingDetailModal({ idLokasi, open, onOpenChange }: { idLokasi: string
                 <h4 className="font-semibold mb-3">Foto Lokasi</h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {detail.foto.map((f, i) => (
-                    <img key={i} src={f} alt={`${detail.namaPerumahan} foto ${i+1}`} className="rounded-lg object-cover aspect-video w-full" />
+                    <FotoItem key={i} src={f} alt={`${detail.namaPerumahan} foto ${i+1}`} />
                   ))}
                 </div>
               </div>
@@ -174,7 +194,7 @@ export default function Listing() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {listing.jumlahUnit || "-"}
+                        {listing.jumlahUnit || <span className="text-muted-foreground text-xs">—</span>}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button variant="ghost" size="icon" className="h-8 w-8">

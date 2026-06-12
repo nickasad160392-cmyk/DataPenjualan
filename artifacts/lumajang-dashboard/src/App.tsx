@@ -8,6 +8,7 @@ import Dashboard from "@/pages/dashboard";
 import Kecamatan from "@/pages/kecamatan";
 import Developer from "@/pages/developer";
 import Listing from "@/pages/listing";
+import Penjualan from "@/pages/penjualan";
 
 const queryClient = new QueryClient();
 
@@ -19,6 +20,7 @@ function Router() {
         <Route path="/kecamatan" component={Kecamatan} />
         <Route path="/developer" component={Developer} />
         <Route path="/listing" component={Listing} />
+        <Route path="/penjualan" component={Penjualan} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

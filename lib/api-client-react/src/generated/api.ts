@@ -27,6 +27,7 @@ import type {
   ListingDetail,
   ListingsResponse,
   LumajangSummary,
+  PenjualanBulananResponse,
   RefreshResult
 } from './api.schemas';
 
@@ -581,3 +582,36 @@ export const useRefreshLumajangData = <TError = ErrorType<unknown>,
       return useMutation(getRefreshLumajangDataMutationOptions(options));
     }
 
+
+export const getGetLumajangPenjualanBulananUrl = () => `/api/lumajang/penjualan-bulanan`;
+
+export const getLumajangPenjualanBulanan = async (options?: RequestInit): Promise<PenjualanBulananResponse> => {
+  return customFetch<PenjualanBulananResponse>(getGetLumajangPenjualanBulananUrl(), {
+    ...options,
+    method: 'GET',
+  });
+};
+
+export const getGetLumajangPenjualanBulananQueryKey = () => [getGetLumajangPenjualanBulananUrl()] as const;
+
+export const getGetLumajangPenjualanBulananQueryOptions = <TData = Awaited<ReturnType<typeof getLumajangPenjualanBulanan>>, TError = ErrorType<unknown>>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getLumajangPenjualanBulanan>>, TError, TData>; request?: SecondParameter<typeof customFetch> }
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetLumajangPenjualanBulananQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getLumajangPenjualanBulanan>>> = ({ signal }) =>
+    getLumajangPenjualanBulanan({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getLumajangPenjualanBulanan>>, TError, TData> & { queryKey: QueryKey };
+};
+
+export type GetLumajangPenjualanBulananQueryResult = NonNullable<Awaited<ReturnType<typeof getLumajangPenjualanBulanan>>>;
+export type GetLumajangPenjualanBulananQueryError = ErrorType<unknown>;
+
+export const useGetLumajangPenjualanBulanan = <TData = Awaited<ReturnType<typeof getLumajangPenjualanBulanan>>, TError = ErrorType<unknown>>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getLumajangPenjualanBulanan>>, TError, TData>; request?: SecondParameter<typeof customFetch> }
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } => {
+  const queryOptions = getGetLumajangPenjualanBulananQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  query.queryKey = queryOptions.queryKey;
+  return query;
+};

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { Building, Map, Users, LayoutDashboard, RefreshCw, Menu } from "lucide-react";
+import { Building, Map, Users, LayoutDashboard, RefreshCw, Menu, TrendingUp } from "lucide-react";
 import { useRefreshLumajangData, useGetLumajangSummary, getGetLumajangSummaryQueryKey, getGetLumajangKecamatanQueryKey, getGetLumajangDevelopersQueryKey, getGetLumajangListingsQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -14,6 +14,7 @@ const navItems = [
   { path: "/kecamatan", label: "Analisis Kecamatan", icon: Map },
   { path: "/developer", label: "Data Developer", icon: Users },
   { path: "/listing", label: "Listing Perumahan", icon: Building },
+  { path: "/penjualan", label: "Penjualan Bulanan", icon: TrendingUp },
 ];
 
 function SidebarContent({ currentLocation }: { currentLocation: string }) {

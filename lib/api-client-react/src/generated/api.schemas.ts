@@ -93,3 +93,27 @@ limit?: number;
 kecamatan?: string | null;
 };
 
+export interface DeveloperSalesItem {
+  namaDeveloper: string;
+  asosiasi: string;
+  totalUnit: number;
+  jumlahLokasi: number;
+  unitBulanLalu: number | null;
+  deltaBulanIni: number | null;
+}
+
+export interface SalesSnapshotSummary {
+  month: string;
+  recordedAt: string;
+  totalUnit: number;
+  activeDevelopers: number;
+}
+
+export interface PenjualanBulananResponse {
+  bulan: string;
+  totalDeveloper: number;
+  snapshotCount: number;
+  developers: DeveloperSalesItem[];
+  snapshots: SalesSnapshotSummary[];
+}
+
