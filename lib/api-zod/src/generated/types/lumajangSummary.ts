@@ -5,6 +5,7 @@
  * API specification for Dashboard Perumahan Lumajang
  * OpenAPI spec version: 0.1.0
  */
+import type { ScrapingStatus } from './scrapingStatus';
 
 export interface LumajangSummary {
   totalLokasi: number;
@@ -14,4 +15,5 @@ export interface LumajangSummary {
   totalSisa: number;
   totalPeminatan: number;
   lastUpdated: string;
+  scraping: ScrapingStatus;
 }

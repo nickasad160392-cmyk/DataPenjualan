@@ -15,3 +15,4 @@ export * from './listingItem';
 export * from './listingsResponse';
 export * from './lumajangSummary';
 export * from './refreshResult';
+export * from './scrapingStatus';

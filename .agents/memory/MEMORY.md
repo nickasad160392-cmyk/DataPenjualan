@@ -1,0 +1,1 @@
+- [SIKUMBANG full-page scraping](sikumbang-scraping.md) — Lumajang listings tersebar di seluruh 1116 halaman, tidak ada filter kabupaten — harus scrape semua.

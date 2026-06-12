@@ -141,6 +141,20 @@ components:
       required:
         - status
 
+    ScrapingStatus:
+      type: object
+      required:
+        - inProgress
+        - pagesScraped
+        - totalPages
+      properties:
+        inProgress:
+          type: boolean
+        pagesScraped:
+          type: integer
+        totalPages:
+          type: integer
+
     LumajangSummary:
       type: object
       required:
@@ -151,6 +165,7 @@ components:
         - totalSisa
         - totalPeminatan
         - lastUpdated
+        - scraping
       properties:
         totalLokasi:
           type: integer
@@ -166,6 +181,8 @@ components:
           type: integer
         lastUpdated:
           type: string
+        scraping:
+          $ref: "#/components/schemas/ScrapingStatus"
 
     KecamatanData:
       type: object

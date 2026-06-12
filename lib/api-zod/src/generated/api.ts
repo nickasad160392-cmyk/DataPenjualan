@@ -26,7 +26,12 @@ export const GetLumajangSummaryResponse = zod.object({
   "totalTerjual": zod.number(),
   "totalSisa": zod.number(),
   "totalPeminatan": zod.number(),
-  "lastUpdated": zod.string()
+  "lastUpdated": zod.string(),
+  "scraping": zod.object({
+  "inProgress": zod.boolean(),
+  "pagesScraped": zod.number(),
+  "totalPages": zod.number()
+})
 })
 
 

@@ -5,16 +5,25 @@ const router = Router();
 
 const SIKUMBANG_BASE = "https://sikumbang.tapera.go.id";
 const LUMAJANG_KODE = "3508";
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL_MS = 10 * 60 * 1000;
+const CONCURRENT_PAGES = 30;
 
 interface CacheEntry<T> {
   data: T;
   fetchedAt: number;
 }
 
+interface ScrapingState {
+  inProgress: boolean;
+  pagesScraped: number;
+  totalPages: number;
+}
+
 let kecamatanCache: CacheEntry<KecamatanRaw[]> | null = null;
 let listingsCache: CacheEntry<ListingItem[]> | null = null;
 let lastRefreshAt: string | null = null;
+let scraping: ScrapingState = { inProgress: false, pagesScraped: 0, totalPages: 0 };
+let scrapePromise: Promise<ListingItem[]> | null = null;
 
 interface KecamatanRaw {
   kodeWilayah: string;
@@ -61,6 +70,102 @@ interface ListingItem {
   foto: string[];
 }
 
+function mapListing(l: SikumbangListing): ListingItem {
+  return {
+    idLokasi: l.idLokasi,
+    namaPerumahan: l.namaPerumahan,
+    jenisPerumahan: l.jenisPerumahan,
+    kecamatan: l.wilayah?.kecamatan ?? "",
+    kelurahan: l.wilayah?.kelurahan ?? null,
+    namaDeveloper: l.pengembang?.nama ?? "",
+    asosiasi: l.pengembang?.asosiasi ?? "",
+    jumlahUnit: l.jumlahUnit ?? null,
+    foto: (l.foto ?? []).map((f) =>
+      f.startsWith("http") ? f : `${SIKUMBANG_BASE}${f}`
+    ),
+  };
+}
+
+function isLumajang(l: SikumbangListing): boolean {
+  return (
+    l.wilayah?.kabupaten === "KAB LUMAJANG" ||
+    l.idLokasi?.startsWith("LMJ")
+  );
+}
+
+async function fetchPage(page: number): Promise<{ listings: ListingItem[]; maxPage: number }> {
+  const res = await fetch(`${SIKUMBANG_BASE}/?page=${page}`, {
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!res.ok) return { listings: [], maxPage: 0 };
+  const html = await res.text();
+  const match = html.match(/window\.SIKUMBANG_DATA\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
+  if (!match) return { listings: [], maxPage: 0 };
+  const pageData = JSON.parse(match[1]) as {
+    page: number;
+    maxPage: number;
+    listLokasi: SikumbangListing[];
+  };
+  const listings = (pageData.listLokasi ?? [])
+    .filter(isLumajang)
+    .map(mapListing);
+  return { listings, maxPage: pageData.maxPage ?? 0 };
+}
+
+async function runFullScrape(): Promise<ListingItem[]> {
+  const results: ListingItem[] = [];
+  const seen = new Set<string>();
+
+  scraping = { inProgress: true, pagesScraped: 0, totalPages: 0 };
+
+  try {
+    const first = await fetchPage(1);
+    const maxPage = first.maxPage || 1116;
+    scraping.totalPages = maxPage;
+    scraping.pagesScraped = 1;
+
+    for (const l of first.listings) {
+      if (!seen.has(l.idLokasi)) {
+        seen.add(l.idLokasi);
+        results.push(l);
+      }
+    }
+
+    for (let start = 2; start <= maxPage; start += CONCURRENT_PAGES) {
+      const batch = Array.from(
+        { length: Math.min(CONCURRENT_PAGES, maxPage - start + 1) },
+        (_, i) => start + i
+      );
+
+      const settled = await Promise.allSettled(batch.map(fetchPage));
+
+      for (const r of settled) {
+        if (r.status === "fulfilled") {
+          for (const l of r.value.listings) {
+            if (!seen.has(l.idLokasi)) {
+              seen.add(l.idLokasi);
+              results.push(l);
+            }
+          }
+        }
+      }
+
+      scraping.pagesScraped = Math.min(start + CONCURRENT_PAGES - 2, maxPage);
+
+      listingsCache = { data: [...results], fetchedAt: Date.now() };
+    }
+
+    listingsCache = { data: results, fetchedAt: Date.now() };
+    lastRefreshAt = new Date().toISOString();
+    logger.info({ total: results.length }, "Full SIKUMBANG scrape complete");
+  } finally {
+    scraping = { inProgress: false, pagesScraped: scraping.totalPages, totalPages: scraping.totalPages };
+    scrapePromise = null;
+  }
+
+  return results;
+}
+
 async function fetchKecamatanData(): Promise<KecamatanRaw[]> {
   if (kecamatanCache && Date.now() - kecamatanCache.fetchedAt < CACHE_TTL_MS) {
     return kecamatanCache.data;
@@ -76,151 +181,30 @@ async function fetchKecamatanData(): Promise<KecamatanRaw[]> {
   return data;
 }
 
-async function fetchAllLumajangListings(): Promise<ListingItem[]> {
-  if (listingsCache && Date.now() - listingsCache.fetchedAt < CACHE_TTL_MS) {
-    return listingsCache.data;
+function ensureScraping(): void {
+  const cacheExpired = !listingsCache || Date.now() - listingsCache.fetchedAt >= CACHE_TTL_MS;
+  if (cacheExpired && !scraping.inProgress && !scrapePromise) {
+    scrapePromise = runFullScrape().catch((err) => {
+      logger.error({ err }, "Full scrape failed");
+      return [];
+    });
   }
-
-  const results: ListingItem[] = [];
-  let page = 1;
-  const limit = 200;
-  let hasMore = true;
-
-  while (hasMore && page <= 10) {
-    try {
-      const url = `${SIKUMBANG_BASE}/?page=${page}`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
-      if (!res.ok) break;
-
-      const html = await res.text();
-      const match = html.match(/window\.SIKUMBANG_DATA\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
-      if (!match) break;
-
-      const pageData = JSON.parse(match[1]) as {
-        page: number;
-        maxPage: number;
-        listLokasi: SikumbangListing[];
-      };
-
-      const lumajangListings = pageData.listLokasi.filter(
-        (l) =>
-          l.wilayah?.kabupaten === "KAB LUMAJANG" ||
-          l.idLokasi.startsWith("LMJ")
-      );
-
-      for (const l of lumajangListings) {
-        results.push({
-          idLokasi: l.idLokasi,
-          namaPerumahan: l.namaPerumahan,
-          jenisPerumahan: l.jenisPerumahan,
-          kecamatan: l.wilayah?.kecamatan ?? "",
-          kelurahan: l.wilayah?.kelurahan ?? null,
-          namaDeveloper: l.pengembang?.nama ?? "",
-          asosiasi: l.pengembang?.asosiasi ?? "",
-          jumlahUnit: l.jumlahUnit ?? null,
-          foto: (l.foto ?? []).map((f) =>
-            f.startsWith("http") ? f : `${SIKUMBANG_BASE}${f}`
-          ),
-        });
-      }
-
-      if (page >= pageData.maxPage || lumajangListings.length === 0) {
-        hasMore = false;
-      }
-
-      page++;
-
-      if (results.length >= limit) break;
-    } catch (err) {
-      logger.warn({ err, page }, "Failed to fetch page, stopping");
-      break;
-    }
-  }
-
-  listingsCache = { data: results, fetchedAt: Date.now() };
-  lastRefreshAt = new Date().toISOString();
-  return results;
 }
 
-async function fetchLumajangListingsTargeted(): Promise<ListingItem[]> {
-  if (listingsCache && Date.now() - listingsCache.fetchedAt < CACHE_TTL_MS) {
-    return listingsCache.data;
-  }
-
-  const results: ListingItem[] = [];
-  const concurrentPages = 5;
-  const maxPages = 50;
-
-  for (let startPage = 1; startPage <= maxPages; startPage += concurrentPages) {
-    const pages = Array.from(
-      { length: Math.min(concurrentPages, maxPages - startPage + 1) },
-      (_, i) => startPage + i
-    );
-
-    const pageResults = await Promise.allSettled(
-      pages.map(async (page) => {
-        const url = `${SIKUMBANG_BASE}/?page=${page}`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
-        if (!res.ok) return [];
-
-        const html = await res.text();
-        const match = html.match(/window\.SIKUMBANG_DATA\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
-        if (!match) return [];
-
-        const pageData = JSON.parse(match[1]) as {
-          page: number;
-          maxPage: number;
-          listLokasi: SikumbangListing[];
-        };
-
-        return pageData.listLokasi.filter(
-          (l) =>
-            l.wilayah?.kabupaten === "KAB LUMAJANG" ||
-            l.idLokasi.startsWith("LMJ")
-        ).map((l) => ({
-          idLokasi: l.idLokasi,
-          namaPerumahan: l.namaPerumahan,
-          jenisPerumahan: l.jenisPerumahan,
-          kecamatan: l.wilayah?.kecamatan ?? "",
-          kelurahan: l.wilayah?.kelurahan ?? null,
-          namaDeveloper: l.pengembang?.nama ?? "",
-          asosiasi: l.pengembang?.asosiasi ?? "",
-          jumlahUnit: l.jumlahUnit ?? null,
-          foto: (l.foto ?? []).map((f) =>
-            f.startsWith("http") ? f : `${SIKUMBANG_BASE}${f}`
-          ),
-        }));
-      })
-    );
-
-    for (const result of pageResults) {
-      if (result.status === "fulfilled") {
-        results.push(...result.value);
-      }
-    }
-
-    if (results.length > 0) {
-      break;
-    }
-  }
-
-  listingsCache = { data: results, fetchedAt: Date.now() };
-  lastRefreshAt = new Date().toISOString();
-  return results;
+function getCachedListings(): ListingItem[] {
+  return listingsCache?.data ?? [];
 }
 
 router.get("/lumajang/summary", async (req, res) => {
   try {
-    const [kecamatanData, listings] = await Promise.all([
-      fetchKecamatanData(),
-      fetchLumajangListingsTargeted(),
-    ]);
+    ensureScraping();
+    const kecamatanData = await fetchKecamatanData();
+    const listings = getCachedListings();
 
     const totalStok = kecamatanData.reduce((sum, k) => sum + (k.supply || 0), 0);
     const totalPeminatan = kecamatanData.reduce((sum, k) => sum + (k.peminatan || 0), 0);
     const totalPilihan = kecamatanData.reduce((sum, k) => sum + (k.pilihan || 0), 0);
     const totalSisa = Math.max(0, totalStok - totalPilihan);
-
     const developerSet = new Set(listings.map((l) => l.namaDeveloper).filter(Boolean));
 
     res.json({
@@ -231,6 +215,7 @@ router.get("/lumajang/summary", async (req, res) => {
       totalSisa,
       totalPeminatan,
       lastUpdated: lastRefreshAt ?? new Date().toISOString(),
+      scraping: { ...scraping },
     });
   } catch (err) {
     req.log.error({ err }, "Failed to get lumajang summary");
@@ -258,16 +243,10 @@ router.get("/lumajang/kecamatan", async (req, res) => {
 
 router.get("/lumajang/developers", async (req, res) => {
   try {
-    const listings = await fetchLumajangListingsTargeted();
+    ensureScraping();
+    const listings = getCachedListings();
 
-    const devMap = new Map<
-      string,
-      {
-        namaDeveloper: string;
-        asosiasi: string;
-        listings: ListingItem[];
-      }
-    >();
+    const devMap = new Map<string, { namaDeveloper: string; asosiasi: string; listings: ListingItem[] }>();
 
     for (const listing of listings) {
       if (!listing.namaDeveloper) continue;
@@ -305,11 +284,12 @@ router.get("/lumajang/developers", async (req, res) => {
 
 router.get("/lumajang/listings", async (req, res) => {
   try {
+    ensureScraping();
     const page = parseInt(String(req.query.page ?? "1"), 10);
     const limit = parseInt(String(req.query.limit ?? "20"), 10);
     const kecamatan = req.query.kecamatan as string | undefined;
 
-    let listings = await fetchLumajangListingsTargeted();
+    let listings = getCachedListings();
 
     if (kecamatan) {
       listings = listings.filter((l) =>
@@ -332,30 +312,14 @@ router.get("/lumajang/listings/:idLokasi", async (req, res) => {
   try {
     const { idLokasi } = req.params;
 
-    const cacheRes = listingsCache?.data.find((l) => l.idLokasi === idLokasi);
-    if (cacheRes) {
-      return res.json(cacheRes);
-    }
+    const cached = getCachedListings().find((l) => l.idLokasi === idLokasi);
+    if (cached) return res.json(cached);
 
     const url = `${SIKUMBANG_BASE}/lokasi-perumahan/${idLokasi}/json`;
     const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
-    if (!r.ok) {
-      return res.status(404).json({ error: "Lokasi tidak ditemukan" });
-    }
-    const detail = await r.json() as SikumbangListing;
-    return res.json({
-      idLokasi: detail.idLokasi,
-      namaPerumahan: detail.namaPerumahan,
-      jenisPerumahan: detail.jenisPerumahan,
-      kecamatan: detail.wilayah?.kecamatan ?? "",
-      kelurahan: detail.wilayah?.kelurahan ?? null,
-      namaDeveloper: detail.pengembang?.nama ?? "",
-      asosiasi: detail.pengembang?.asosiasi ?? "",
-      jumlahUnit: detail.jumlahUnit ?? null,
-      foto: (detail.foto ?? []).map((f) =>
-        f.startsWith("http") ? f : `${SIKUMBANG_BASE}${f}`
-      ),
-    });
+    if (!r.ok) return res.status(404).json({ error: "Lokasi tidak ditemukan" });
+    const detail = (await r.json()) as SikumbangListing;
+    return res.json(mapListing(detail));
   } catch (err) {
     req.log.error({ err }, "Failed to get listing detail");
     res.status(500).json({ error: "Gagal mengambil detail listing" });
@@ -364,14 +328,26 @@ router.get("/lumajang/listings/:idLokasi", async (req, res) => {
 
 router.post("/lumajang/refresh", async (req, res) => {
   try {
+    if (scraping.inProgress) {
+      return res.json({
+        success: false,
+        message: `Sedang scraping... (${scraping.pagesScraped}/${scraping.totalPages} halaman)`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     kecamatanCache = null;
     listingsCache = null;
 
-    await Promise.all([fetchKecamatanData(), fetchLumajangListingsTargeted()]);
+    fetchKecamatanData().catch(() => {});
+    scrapePromise = runFullScrape().catch((err) => {
+      logger.error({ err }, "Refresh scrape failed");
+      return [];
+    });
 
     res.json({
       success: true,
-      message: "Data berhasil diperbarui dari SIKUMBANG",
+      message: "Scraping dimulai — data akan diperbarui secara bertahap",
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
@@ -383,5 +359,7 @@ router.post("/lumajang/refresh", async (req, res) => {
     });
   }
 });
+
+ensureScraping();
 
 export default router;

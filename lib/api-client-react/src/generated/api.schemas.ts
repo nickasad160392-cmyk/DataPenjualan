@@ -9,6 +9,12 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface ScrapingStatus {
+  inProgress: boolean;
+  pagesScraped: number;
+  totalPages: number;
+}
+
 export interface LumajangSummary {
   totalLokasi: number;
   totalDeveloper: number;
@@ -17,6 +23,7 @@ export interface LumajangSummary {
   totalSisa: number;
   totalPeminatan: number;
   lastUpdated: string;
+  scraping: ScrapingStatus;
 }
 
 export interface KecamatanData {
