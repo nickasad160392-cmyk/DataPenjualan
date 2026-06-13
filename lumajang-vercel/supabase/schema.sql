@@ -1,6 +1,6 @@
 -- ============================================================
 -- Dashboard Perumahan Lumajang — Supabase Schema
--- Jalankan di Supabase SQL Editor
+-- Aman dijalankan berulang kali (idempotent)
 -- ============================================================
 
 -- Tabel listings (data perumahan)
@@ -17,11 +17,10 @@ CREATE TABLE IF NOT EXISTS listings (
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Index untuk query cepat
 CREATE INDEX IF NOT EXISTS idx_listings_kecamatan ON listings (kecamatan);
 CREATE INDEX IF NOT EXISTS idx_listings_developer ON listings (nama_developer);
 
--- Tabel cache data kecamatan (dari grafik-data SIKUMBANG)
+-- Tabel cache data kecamatan
 CREATE TABLE IF NOT EXISTS kecamatan_cache (
   kode_wilayah  TEXT PRIMARY KEY,
   nama_wilayah  TEXT NOT NULL,
@@ -55,17 +54,22 @@ CREATE TABLE IF NOT EXISTS scrape_progress (
   last_refreshed  TIMESTAMPTZ
 );
 
--- Inisialisasi baris scrape_progress
 INSERT INTO scrape_progress (id) VALUES (1) ON CONFLICT DO NOTHING;
 
--- Row Level Security (opsional, untuk akses publik read-only)
+-- Row Level Security
 ALTER TABLE listings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kecamatan_cache ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sales_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scrape_progress ENABLE ROW LEVEL SECURITY;
 
--- Policy: baca publik (anon key boleh SELECT)
-CREATE POLICY "public read listings"       ON listings        FOR SELECT USING (true);
-CREATE POLICY "public read kecamatan"      ON kecamatan_cache FOR SELECT USING (true);
-CREATE POLICY "public read snapshots"      ON sales_snapshots FOR SELECT USING (true);
+-- Hapus policy lama dulu (supaya tidak error kalau sudah ada)
+DROP POLICY IF EXISTS "public read listings"        ON listings;
+DROP POLICY IF EXISTS "public read kecamatan"       ON kecamatan_cache;
+DROP POLICY IF EXISTS "public read snapshots"       ON sales_snapshots;
+DROP POLICY IF EXISTS "public read scrape_progress" ON scrape_progress;
+
+-- Buat ulang policy
+CREATE POLICY "public read listings"        ON listings        FOR SELECT USING (true);
+CREATE POLICY "public read kecamatan"       ON kecamatan_cache FOR SELECT USING (true);
+CREATE POLICY "public read snapshots"       ON sales_snapshots FOR SELECT USING (true);
 CREATE POLICY "public read scrape_progress" ON scrape_progress FOR SELECT USING (true);
