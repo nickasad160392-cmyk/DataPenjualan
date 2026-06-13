@@ -1,1 +1,2 @@
 - [SIKUMBANG full-page scraping](sikumbang-scraping.md) — Lumajang listings tersebar di seluruh 1116 halaman, tidak ada filter kabupaten — harus scrape semua.
+- [Vercel + Supabase migration](vercel-supabase-migration.md) — Full migration pattern: chunked scraping from browser, Supabase for persistence, no long-running processes.
