@@ -143,15 +143,29 @@ Di halaman konfigurasi, isi sebagai berikut:
 
 Ini langkah paling penting. Klik bagian **"Environment Variables"** dan tambahkan:
 
-**Variable 1:**
+**Variable 1 (wajib):**
 - Name: `SUPABASE_URL`
 - Value: URL project Supabase kamu (contoh: `https://abcdefgh.supabase.co`)
 
-**Variable 2:**
+**Variable 2 (wajib):**
 - Name: `SUPABASE_SERVICE_ROLE_KEY`
 - Value: service_role key dari Supabase (yang panjang, dimulai `eyJhbGci...`)
 
-> Pastikan kedua variable ini ada sebelum deploy!
+**Variable 3 (opsional — untuk Supabase Realtime):**
+- Name: `VITE_SUPABASE_URL`
+- Value: sama dengan `SUPABASE_URL` di atas
+
+**Variable 4 (opsional — untuk Supabase Realtime):**
+- Name: `VITE_SUPABASE_ANON_KEY`
+- Value: **anon/public key** dari Supabase (Settings → API → "anon public")
+
+> ⚠️ `SUPABASE_SERVICE_ROLE_KEY` hanya boleh dipakai di server (Vercel Functions).
+> `VITE_SUPABASE_ANON_KEY` adalah key publik yang aman dipakai di browser untuk Realtime.
+>
+> Jika Variable 3 & 4 tidak diisi, dashboard tetap berfungsi dengan polling setiap 30 detik.
+> Jika diisi, dashboard update otomatis via WebSocket tanpa polling — lebih hemat bandwidth.
+
+> Pastikan minimal Variable 1 & 2 ada sebelum deploy!
 
 ### 4.4 Deploy
 
@@ -179,17 +193,18 @@ Dashboard akan menampilkan progress scraping secara real-time:
 
 ```
 Memulai scraping...
-→ Scraping halaman 1–100 dari 1116...
-→ Scraping halaman 101–200 dari 1116...
-→ ... (berlanjut otomatis)
-→ Scraping halaman 1001–1116 dari 1116...
+→ Scraping halaman 1–20 dari 1116...
+→ Scraping halaman 21–40 dari 1116...
+→ ... (berlanjut otomatis, berhenti lebih awal jika tidak ada listing Lumajang)
 → Mengambil detail unit...
 → Enrich 50 listing tersisa...
 → Menyimpan snapshot bulanan...
 ```
 
-> ⏱️ **Estimasi waktu**: 5–10 menit untuk scraping lengkap 1116 halaman
-> Jangan tutup tab browser selama proses berlangsung!
+> ⏱️ **Estimasi waktu**: 3–5 menit (early stop aktif — tidak perlu scan semua 1116 halaman)
+>
+> 💡 **Jika tab tertutup di tengah jalan**: Buka lagi tab-nya — scraping akan **dilanjutkan otomatis**
+> dari halaman terakhir yang sudah diproses. Progress tersimpan di Supabase.
 
 ### 5.3 Setelah Selesai
 

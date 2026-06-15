@@ -103,6 +103,16 @@ export interface ScrapeChunkResult {
   isDone: boolean;
 }
 
+export interface ScrapeProgress {
+  inProgress: boolean;
+  pagesScraped: number;
+  totalPages: number;
+  enriched: number;
+  toEnrich: number;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
 export interface EnrichResult {
   ok: boolean;
   enriched: number;
@@ -122,5 +132,6 @@ export const api = {
   scrapeChunk: (start: number, end: number) => post<ScrapeChunkResult>("/scrape-chunk", { start, end }),
   scrapeEnrich: () => post<EnrichResult>("/scrape-enrich"),
   saveSnapshot: () => post<{ ok: boolean }>("/save-snapshot"),
+  getProgress: () => get<ScrapeProgress>("/progress"),
   proxyFotoUrl: (url: string) => `${BASE}/photo-proxy?url=${encodeURIComponent(url)}`,
 };

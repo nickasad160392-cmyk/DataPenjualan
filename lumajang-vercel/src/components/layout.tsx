@@ -1,10 +1,11 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Building, Map, Users, LayoutDashboard, RefreshCw, Menu, TrendingUp, Loader2, X
+  Building, Map, Users, LayoutDashboard, RefreshCw, Menu, TrendingUp, Loader2, X, Wifi, WifiOff
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { useRealtimeData } from "@/hooks/useRealtimeData";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 
@@ -13,10 +14,10 @@ const navItems = [
   { path: "/kecamatan", label: "Analisis Kecamatan", icon: Map },
   { path: "/developer", label: "Data Developer", icon: Users },
   { path: "/listing", label: "Listing Perumahan", icon: Building },
-  { path: "/penjualan", label: "Penjualan Bulanan", icon: TrendingUp },
+  { path: "/penjualan", label: "Unit per Periode", icon: TrendingUp },
 ];
 
-const CHUNK_SIZE = 100;
+const CHUNK_SIZE = 20;
 
 function SidebarContent({ currentPath, onClose }: { currentPath: string; onClose?: () => void }) {
   return (
@@ -65,6 +66,28 @@ function SidebarContent({ currentPath, onClose }: { currentPath: string; onClose
   );
 }
 
+/**
+ * Jalankan loop scraping dari halaman `startPage` sampai selesai.
+ * Dipakai baik untuk mulai baru maupun resume setelah tab ditutup (Bug #4).
+ */
+async function runScrapeLoop(
+  startPage: number,
+  totalPages: number,
+  onStatus: (msg: string) => void,
+  onChunkDone: () => void,
+): Promise<void> {
+  let currentStart = startPage;
+
+  while (currentStart <= totalPages) {
+    const currentEnd = Math.min(currentStart + CHUNK_SIZE - 1, totalPages);
+    onStatus(`Scraping halaman ${currentStart}–${currentEnd} dari ${totalPages}...`);
+    const result = await api.scrapeChunk(currentStart, currentEnd);
+    onChunkDone();
+    if (result.isDone || result.nextStart === null) break;
+    currentStart = result.nextStart;
+  }
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const queryClient = useQueryClient();
@@ -72,10 +95,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshStatus, setRefreshStatus] = useState<string | null>(null);
 
+  // Bug #7 — Supabase Realtime menggantikan polling saat env vars tersedia
+  const { realtimeEnabled } = useRealtimeData();
+
   const { data: summary } = useQuery({
     queryKey: ["summary"],
     queryFn: api.summary,
-    refetchInterval: (q) => (q.state.data?.scraping?.inProgress ? 3000 : false),
+    // Polling tetap aktif sebagai fallback jika Realtime tidak tersedia,
+    // atau saat scraping sedang berjalan (update progress cepat)
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      if (d?.scraping?.inProgress) return 3000;
+      return realtimeEnabled ? false : 30000;
+    },
   });
 
   const invalidateAll = useCallback(() => {
@@ -86,6 +118,69 @@ export function Layout({ children }: { children: React.ReactNode }) {
     queryClient.invalidateQueries({ queryKey: ["penjualan"] });
   }, [queryClient]);
 
+  /**
+   * Bug #4 — Auto-resume scraping yang terputus
+   *
+   * Saat halaman dibuka, cek scrape_progress di Supabase.
+   * Jika ada scraping yang masih `in_progress: true` (artinya tab ditutup di tengah),
+   * lanjutkan otomatis dari halaman terakhir yang sudah di-scrape.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkAndResume() {
+      try {
+        const progress = await api.getProgress();
+        if (cancelled) return;
+
+        if (
+          progress.inProgress &&
+          progress.pagesScraped > 0 &&
+          progress.totalPages > 0 &&
+          progress.pagesScraped < progress.totalPages
+        ) {
+          const resumeFrom = progress.pagesScraped + 1;
+          setIsRefreshing(true);
+          setRefreshStatus(`Melanjutkan scraping dari halaman ${resumeFrom}...`);
+
+          await runScrapeLoop(
+            resumeFrom,
+            progress.totalPages,
+            setRefreshStatus,
+            invalidateAll,
+          );
+
+          if (!cancelled) {
+            setRefreshStatus("Mengambil detail unit...");
+            let enrichDone = false;
+            while (!enrichDone && !cancelled) {
+              const enrichResult = await api.scrapeEnrich();
+              enrichDone = enrichResult.done;
+              if (!enrichDone) {
+                setRefreshStatus(`Enrich ${enrichResult.remaining} listing tersisa...`);
+              }
+            }
+
+            if (!cancelled) {
+              setRefreshStatus("Menyimpan snapshot...");
+              await api.saveSnapshot();
+              invalidateAll();
+              setRefreshStatus(null);
+            }
+          }
+        }
+      } catch {
+        // Gagal cek progress — abaikan saja, user bisa trigger manual
+      } finally {
+        if (!cancelled) setIsRefreshing(false);
+      }
+    }
+
+    checkAndResume();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleRefresh = async () => {
     if (isRefreshing) return;
     setIsRefreshing(true);
@@ -93,16 +188,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
     try {
       const init = await api.refresh();
-      const totalChunks = Math.ceil(init.totalPages / CHUNK_SIZE);
 
-      for (let chunk = 0; chunk < totalChunks; chunk++) {
-        const start = chunk * CHUNK_SIZE + 1;
-        const end = Math.min(start + CHUNK_SIZE - 1, init.totalPages);
-        setRefreshStatus(`Scraping halaman ${start}–${end} dari ${init.totalPages}...`);
-        const result = await api.scrapeChunk(start, end);
-        if (result.isDone) break;
-        invalidateAll();
-      }
+      await runScrapeLoop(
+        1,
+        init.totalPages,
+        setRefreshStatus,
+        invalidateAll,
+      );
 
       setRefreshStatus("Mengambil detail unit...");
       let enrichDone = false;
@@ -130,7 +222,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-gray-50 flex w-full">
-      {/* Mobile overlay */}
       {mobileOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden"
@@ -138,12 +229,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* Mobile sidebar */}
       <div className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col md:hidden transition-transform duration-200 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <SidebarContent currentPath={location} onClose={() => setMobileOpen(false)} />
       </div>
 
-      {/* Desktop sidebar */}
       <div className="hidden md:flex w-64 flex-col fixed inset-y-0 z-50">
         <SidebarContent currentPath={location} />
       </div>
@@ -158,7 +247,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Menu className="h-5 w-5" />
             </button>
             <div className="hidden sm:block">
-              {summary?.lastUpdated && (
+              {summary?.lastUpdated && !refreshStatus && (
                 <p className="text-sm text-gray-500">
                   Terakhir diperbarui: {format(new Date(summary.lastUpdated), "dd MMM yyyy, HH:mm", { locale: id })}
                 </p>
@@ -172,14 +261,31 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium border border-gray-200 rounded-md bg-white hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-          >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-            <span className="hidden sm:inline">Refresh Data</span>
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Indikator status Realtime */}
+            <span
+              title={realtimeEnabled ? "Supabase Realtime aktif" : "Mode polling (set VITE_SUPABASE_ANON_KEY untuk Realtime)"}
+              className={`hidden sm:flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${
+                realtimeEnabled
+                  ? "bg-green-100 text-green-700"
+                  : "bg-gray-100 text-gray-400"
+              }`}
+            >
+              {realtimeEnabled
+                ? <><Wifi className="h-3 w-3" /> Realtime</>
+                : <><WifiOff className="h-3 w-3" /> Polling</>
+              }
+            </span>
+
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium border border-gray-200 rounded-md bg-white hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">Refresh Data</span>
+            </button>
+          </div>
         </header>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">

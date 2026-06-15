@@ -2,14 +2,14 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { supabase } from "../../lib/supabase";
 import { scrapePage } from "../../lib/sikumbang";
 
-const CONCURRENT = 20;
-const CHUNK_SIZE = 100;
+const CONCURRENT = 10;
+const CHUNK_SIZE = 20;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).end();
 
   const start = parseInt(String(req.body?.start ?? req.query.start ?? "1"), 10);
-  const end = Math.min(parseInt(String(req.body?.end ?? req.query.end ?? String(start + CHUNK_SIZE - 1)), 10), 1116);
+  const end = parseInt(String(req.body?.end ?? req.query.end ?? String(start + CHUNK_SIZE - 1)), 10);
 
   if (isNaN(start) || isNaN(end) || start > end) {
     return res.status(400).json({ error: "Parameter start/end tidak valid" });

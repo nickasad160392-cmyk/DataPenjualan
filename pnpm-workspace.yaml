@@ -39,6 +39,11 @@ packages:
   - lib/*
   - lib/integrations/*
   - scripts
+  # lumajang-vercel adalah sub-project standalone untuk deploy ke Vercel.
+  # Dependensinya dikelola terpisah (npm install di dalam folder lumajang-vercel/).
+  # Tidak dimasukkan ke workspace pnpm karena menggunakan versi package berbeda
+  # (React 18 vs React 19 di workspace utama). Jalankan `npm install` di lumajang-vercel/ secara manual.
+  # - lumajang-vercel  ← sengaja dikomentari, lihat PANDUAN-DEPLOY.md
 
 catalog:
   '@replit/vite-plugin-cartographer': ^0.5.21
