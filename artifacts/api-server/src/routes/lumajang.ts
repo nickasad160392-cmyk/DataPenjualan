@@ -96,6 +96,16 @@ interface ListingItem {
   asosiasi: string;
   jumlahUnit: string | null;
   foto: string[];
+  koordinat: [number, number] | null;
+}
+
+function parseKoordinat(raw: string | undefined | null): [number, number] | null {
+  if (!raw) return null;
+  const parts = raw.split(",").map((s) => parseFloat(s.trim()));
+  if (parts.length < 2 || parts.some(isNaN)) return null;
+  const [lat, lng] = parts;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return [lng, lat];
 }
 
 function mapListing(l: SikumbangListing): ListingItem {
@@ -111,6 +121,7 @@ function mapListing(l: SikumbangListing): ListingItem {
     foto: (l.foto ?? [])
       .filter((f) => f && typeof f === "string" && f.trim() !== "")
       .map((f) => f.startsWith("http") ? f : `${SIKUMBANG_BASE}${f}`),
+    koordinat: null,
   };
 }
 
@@ -165,7 +176,8 @@ async function fetchListingDetail(idLokasi: string): Promise<Partial<ListingItem
       const foto = (d.detail.foto ?? [])
         .filter((f) => f && typeof f === "string")
         .map((f) => f.startsWith("http") ? f : `${SIKUMBANG_BASE}${f}`);
-      return { jumlahUnit, foto };
+      const koordinat = parseKoordinat(d.detail.koordinatPerumahan);
+      return { jumlahUnit, foto, koordinat };
     }
 
     const mapped = mapListing(raw as SikumbangListing);
@@ -176,7 +188,7 @@ async function fetchListingDetail(idLokasi: string): Promise<Partial<ListingItem
 }
 
 async function enrichListings(listings: ListingItem[]): Promise<void> {
-  const toEnrich = listings.filter((l) => !l.jumlahUnit || l.jumlahUnit === "");
+  const toEnrich = listings.filter((l) => !l.jumlahUnit || l.jumlahUnit === "" || !l.koordinat);
   if (toEnrich.length === 0) return;
 
   scraping.enriching = true;
@@ -200,6 +212,7 @@ async function enrichListings(listings: ListingItem[]): Promise<void> {
           if (r.value.jumlahUnit) listings[idx].jumlahUnit = r.value.jumlahUnit;
           if (r.value.foto && r.value.foto.length > 0) listings[idx].foto = r.value.foto;
           if (r.value.kelurahan) listings[idx].kelurahan = r.value.kelurahan;
+          if (r.value.koordinat) listings[idx].koordinat = r.value.koordinat;
         }
       }
       scraping.enriched++;
@@ -540,7 +553,7 @@ router.get("/lumajang/listings/:idLokasi", async (req, res) => {
 
     const cached = getCachedListings().find((l) => l.idLokasi === idLokasi);
 
-    const needsFetch = !cached || !cached.jumlahUnit || cached.foto.length === 0;
+    const needsFetch = !cached || !cached.jumlahUnit || cached.foto.length === 0 || !cached.koordinat;
     if (!needsFetch && cached) return res.json(cached);
 
     const enriched = await fetchListingDetail(idLokasi);
@@ -552,6 +565,7 @@ router.get("/lumajang/listings/:idLokasi", async (req, res) => {
       if (enriched.jumlahUnit) cached.jumlahUnit = enriched.jumlahUnit;
       if (enriched.foto && enriched.foto.length > 0) cached.foto = enriched.foto;
       if (enriched.kelurahan) cached.kelurahan = enriched.kelurahan;
+      if (enriched.koordinat) cached.koordinat = enriched.koordinat;
       return res.json(cached);
     }
 

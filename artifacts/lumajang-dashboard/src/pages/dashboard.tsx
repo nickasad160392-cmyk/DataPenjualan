@@ -11,60 +11,31 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
 import {
-  Building, MapPin, Package, CheckCircle, Clock, Loader2,
-  ChevronDown, ChevronRight, Search, X,
+  Building, MapPin, Package, Loader2,
+  ChevronDown, ChevronRight, Search,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
+import { PerumahanMap, type PerumahanListing } from "@/components/perumahan-map";
 
-const KECAMATAN_COORDS: Record<string, [number, number]> = {
-  "LUMAJANG": [-8.1347, 113.2269],
-  "KUNIR": [-8.2294, 113.1891],
-  "YOSOWILANGUN": [-8.2167, 113.1000],
-  "ROWOKANGKUNG": [-8.2917, 113.2333],
-  "TEKUNG": [-8.1731, 113.2667],
-  "TEMPEH": [-8.2333, 113.3333],
-  "PASIRIAN": [-8.3333, 113.3500],
-  "CANDIPURO": [-8.3667, 113.4167],
-  "PRONOJIWO": [-8.2833, 113.4500],
-  "SENDURO": [-8.1167, 113.3333],
-  "PASRUJAMBE": [-8.1500, 113.3833],
-  "GUCIALIT": [-8.0833, 113.3500],
-  "JATIROTO": [-8.2167, 113.1500],
-  "RANUYOSO": [-8.0833, 113.2500],
-  "KLAKAH": [-8.1500, 113.2667],
-  "RANDUAGUNG": [-8.1667, 113.2000],
-  "SUKODONO": [-8.0667, 113.1833],
-  "PADANG": [-8.1833, 113.3167],
-  "KEDUNGJAJANG": [-8.0500, 113.2000],
-  "SUMBERSUKO": [-8.1333, 113.2500],
+type RawListing = PerumahanListing & {
+  jenisPerumahan?: string;
+  kelurahan?: string | null;
+  asosiasi?: string;
+  foto?: string[];
 };
-
-function getCoords(kecamatan: string): [number, number] | null {
-  const key = kecamatan.toUpperCase().trim();
-  return KECAMATAN_COORDS[key] ?? null;
-}
 
 function LokasiModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [search, setSearch] = useState("");
   const { data: allListings, isLoading } = useGetLumajangListings(
-    { page: 1, limit: 200 },
+    { page: 1, limit: 500 },
     { query: { enabled: open } }
   );
 
-  const listings = allListings?.data ?? [];
-
-  const byKecamatan: Record<string, typeof listings> = {};
-  for (const l of listings) {
-    const k = l.kecamatan || "Lainnya";
-    if (!byKecamatan[k]) byKecamatan[k] = [];
-    byKecamatan[k].push(l);
-  }
+  const listings = (allListings?.data ?? []) as RawListing[];
 
   const filtered = listings.filter(
     (l) =>
@@ -73,18 +44,13 @@ function LokasiModal({ open, onClose }: { open: boolean; onClose: () => void }) 
       l.namaDeveloper.toLowerCase().includes(search.toLowerCase())
   );
 
-  const mapMarkers = Object.entries(byKecamatan).map(([kec, items]) => {
-    const coords = getCoords(kec);
-    return { kec, items, coords };
-  }).filter((m) => m.coords !== null);
-
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-blue-600" />
-            {listings.length} Lokasi Perumahan — Kabupaten Lumajang
+      <DialogContent className="w-full max-w-5xl max-h-[92dvh] overflow-hidden flex flex-col p-0">
+        <DialogHeader className="px-4 sm:px-6 pt-5 pb-4 border-b shrink-0">
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <MapPin className="h-5 w-5 text-blue-600 shrink-0" />
+            {listings.length} Lokasi Perumahan — Kab. Lumajang
           </DialogTitle>
         </DialogHeader>
 
@@ -94,42 +60,19 @@ function LokasiModal({ open, onClose }: { open: boolean; onClose: () => void }) 
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div className="flex flex-col gap-0">
-              <div className="h-72 w-full shrink-0">
-                <MapContainer
-                  center={[-8.18, 113.25]}
-                  zoom={10}
-                  style={{ height: "100%", width: "100%" }}
-                  scrollWheelZoom={false}
-                >
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                  />
-                  {mapMarkers.map(({ kec, items, coords }) => (
-                    <CircleMarker
-                      key={kec}
-                      center={coords!}
-                      radius={Math.max(8, Math.min(24, items.length * 2))}
-                      pathOptions={{ color: "#2563eb", fillColor: "#3b82f6", fillOpacity: 0.7 }}
-                    >
-                      <Popup maxWidth={280}>
-                        <div className="font-semibold text-sm mb-2">{kec} — {items.length} lokasi</div>
-                        <div className="space-y-1 max-h-40 overflow-y-auto">
-                          {items.map((l) => (
-                            <div key={l.idLokasi} className="text-xs border-b pb-1 last:border-0">
-                              <div className="font-medium">{l.namaPerumahan}</div>
-                              <div className="text-gray-500">{l.namaDeveloper} · {l.jumlahUnit ? `${l.jumlahUnit} unit` : "—"}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </Popup>
-                    </CircleMarker>
-                  ))}
-                </MapContainer>
+            <div className="flex flex-col">
+              <div className="shrink-0" style={{ height: "260px" }}>
+                <PerumahanMap listings={listings} height="260px" />
               </div>
-
-              <div className="px-6 py-4 border-t">
+              <div className="px-4 sm:px-6 py-4 border-t">
+                <div className="text-xs text-muted-foreground mb-3 flex gap-3 flex-wrap">
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-3 h-3 rounded-full bg-blue-600" /> Lokasi GPS asli
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-3 h-3 rounded-full bg-slate-400" /> Estimasi kecamatan
+                  </span>
+                </div>
                 <div className="relative mb-4">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -139,14 +82,14 @@ function LokasiModal({ open, onClose }: { open: boolean; onClose: () => void }) 
                     onChange={(e) => setSearch(e.target.value)}
                   />
                 </div>
-                <div className="rounded-md border overflow-hidden">
+                <div className="rounded-md border overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Nama Perumahan</TableHead>
-                        <TableHead>Developer</TableHead>
-                        <TableHead>Kecamatan</TableHead>
-                        <TableHead className="text-right">Jumlah Unit</TableHead>
+                        <TableHead className="min-w-[160px]">Nama Perumahan</TableHead>
+                        <TableHead className="min-w-[140px]">Developer</TableHead>
+                        <TableHead className="min-w-[100px]">Kecamatan</TableHead>
+                        <TableHead className="text-right min-w-[80px]">Unit</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -155,9 +98,9 @@ function LokasiModal({ open, onClose }: { open: boolean; onClose: () => void }) 
                           <TableCell className="font-medium text-sm">{l.namaPerumahan}</TableCell>
                           <TableCell className="text-sm">{l.namaDeveloper}</TableCell>
                           <TableCell>
-                            <Badge variant="secondary" className="font-normal">{l.kecamatan}</Badge>
+                            <Badge variant="secondary" className="font-normal text-xs">{l.kecamatan}</Badge>
                           </TableCell>
-                          <TableCell className="text-right font-semibold">{l.jumlahUnit || "—"}</TableCell>
+                          <TableCell className="text-right font-semibold">{l.jumlahUnit ?? "—"}</TableCell>
                         </TableRow>
                       ))}
                       {filtered.length === 0 && (
@@ -194,15 +137,15 @@ function DeveloperModal({ open, onClose }: { open: boolean; onClose: () => void 
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <Building className="h-5 w-5 text-blue-600" />
-            {developers?.length ?? 0} Developer Aktif — Klik baris untuk lihat detail perumahan
+      <DialogContent className="w-full max-w-5xl max-h-[92dvh] overflow-hidden flex flex-col p-0">
+        <DialogHeader className="px-4 sm:px-6 pt-5 pb-4 border-b shrink-0">
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Building className="h-5 w-5 text-blue-600 shrink-0" />
+            {developers?.length ?? 0} Developer Aktif
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
           <div className="relative mb-4">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -218,15 +161,15 @@ function DeveloperModal({ open, onClose }: { open: boolean; onClose: () => void 
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div className="rounded-md border overflow-hidden">
+            <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8" />
-                    <TableHead>Developer</TableHead>
-                    <TableHead>Asosiasi</TableHead>
-                    <TableHead className="text-right">Lokasi</TableHead>
-                    <TableHead className="text-right">Total Unit (Stok)</TableHead>
+                    <TableHead className="min-w-[160px]">Developer</TableHead>
+                    <TableHead className="min-w-[100px]">Asosiasi</TableHead>
+                    <TableHead className="text-right min-w-[60px]">Lokasi</TableHead>
+                    <TableHead className="text-right min-w-[80px]">Total Unit</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -242,8 +185,8 @@ function DeveloperModal({ open, onClose }: { open: boolean; onClose: () => void 
                             : <ChevronRight className="h-4 w-4 text-muted-foreground" />
                           }
                         </TableCell>
-                        <TableCell className="font-bold">{dev.namaDeveloper}</TableCell>
-                        <TableCell><Badge variant="outline" className="font-normal">{dev.asosiasi}</Badge></TableCell>
+                        <TableCell className="font-bold text-sm">{dev.namaDeveloper}</TableCell>
+                        <TableCell><Badge variant="outline" className="font-normal text-xs">{dev.asosiasi}</Badge></TableCell>
                         <TableCell className="text-right">{dev.jumlahLokasi}</TableCell>
                         <TableCell className="text-right font-semibold">{dev.totalUnit.toLocaleString()}</TableCell>
                       </TableRow>
@@ -251,23 +194,21 @@ function DeveloperModal({ open, onClose }: { open: boolean; onClose: () => void 
                       {expanded[dev.namaDeveloper] && (
                         <TableRow className="bg-muted/30">
                           <TableCell colSpan={5} className="p-0">
-                            <div className="p-4 pl-10">
+                            <div className="p-4 pl-6 sm:pl-10">
                               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
-                                Daftar Perumahan ({dev.listings.length})
+                                Perumahan ({dev.listings.length})
                               </p>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                {dev.listings.map((l) => {
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {dev.listings.map((l: RawListing) => {
                                   const unit = l.jumlahUnit ? parseInt(l.jumlahUnit, 10) : 0;
                                   return (
                                     <div key={l.idLokasi} className="bg-background rounded border p-3">
                                       <div className="font-medium text-sm leading-tight">{l.namaPerumahan}</div>
                                       <div className="flex items-center justify-between mt-1">
                                         <span className="text-xs text-muted-foreground">{l.kecamatan}</span>
-                                        <div className="flex items-center gap-2 text-xs">
-                                          <span className="text-blue-600 font-semibold">
-                                            {unit > 0 ? `${unit.toLocaleString()} unit` : "—"}
-                                          </span>
-                                        </div>
+                                        <span className="text-xs text-blue-600 font-semibold">
+                                          {unit > 0 ? `${unit.toLocaleString()} unit` : "—"}
+                                        </span>
                                       </div>
                                     </div>
                                   );
@@ -301,84 +242,136 @@ function StokModal({ open, onClose, summary }: {
   onClose: () => void;
   summary: { totalStok: number; totalDipilih: number; totalSisa: number } | undefined;
 }) {
-  const { data: kecamatan, isLoading } = useGetLumajangKecamatan({ query: { enabled: open } });
+  const [search, setSearch] = useState("");
+  const { data: listingsResp, isLoading: isListingsLoading } = useGetLumajangListings(
+    { page: 1, limit: 500 },
+    { query: { enabled: open } }
+  );
+  const { data: kecamatanData } = useGetLumajangKecamatan({ query: { enabled: open } });
 
-  const sorted = [...(kecamatan ?? [])].filter((k) => k.supply > 0).sort((a, b) => b.supply - a.supply);
+  const listings = (listingsResp?.data ?? []) as RawListing[];
+
+  const kecMap: Record<string, { supply: number; pilihan: number }> = {};
+  for (const k of kecamatanData ?? []) {
+    kecMap[k.namaWilayah?.toUpperCase()] = { supply: k.supply, pilihan: k.pilihan };
+  }
+
+  const withEstimate = listings
+    .map((l) => {
+      const unit = parseInt(l.jumlahUnit ?? "0", 10) || 0;
+      const kec = kecMap[l.kecamatan?.toUpperCase()] ?? { supply: 0, pilihan: 0 };
+      const estPilihan = kec.supply > 0 ? Math.round((unit / kec.supply) * kec.pilihan) : 0;
+      const estSisa = Math.max(0, unit - estPilihan);
+      return { ...l, unit, estPilihan, estSisa };
+    })
+    .filter((l) => l.unit > 0)
+    .sort((a, b) => b.unit - a.unit);
+
+  const filtered = withEstimate.filter(
+    (l) =>
+      l.namaPerumahan.toLowerCase().includes(search.toLowerCase()) ||
+      l.kecamatan.toLowerCase().includes(search.toLowerCase()) ||
+      l.namaDeveloper.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5 text-blue-600" />
-            Rincian Total Stok — Seluruh 118 Lokasi Lumajang
+      <DialogContent className="w-full max-w-5xl max-h-[92dvh] overflow-hidden flex flex-col p-0">
+        <DialogHeader className="px-4 sm:px-6 pt-5 pb-4 border-b shrink-0">
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Package className="h-5 w-5 text-blue-600 shrink-0" />
+            Rincian Stok per Perumahan
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
           {summary && (
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="rounded-lg border p-4 text-center">
-                <div className="text-2xl font-bold text-blue-600">{summary.totalStok.toLocaleString()}</div>
-                <div className="text-sm text-muted-foreground mt-1">Total Stok Terdaftar</div>
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-5">
+              <div className="rounded-lg border p-3 sm:p-4 text-center">
+                <div className="text-lg sm:text-2xl font-bold text-blue-600">{summary.totalStok.toLocaleString()}</div>
+                <div className="text-xs sm:text-sm text-muted-foreground mt-1">Total Stok</div>
               </div>
-              <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-center">
-                <div className="text-2xl font-bold text-yellow-600">{summary.totalDipilih.toLocaleString()}</div>
-                <div className="text-sm text-muted-foreground mt-1">Sudah Dipilih / Diminati</div>
+              <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 sm:p-4 text-center">
+                <div className="text-lg sm:text-2xl font-bold text-yellow-600">{summary.totalDipilih.toLocaleString()}</div>
+                <div className="text-xs sm:text-sm text-muted-foreground mt-1">Dipilih</div>
                 <div className="text-xs text-yellow-600 mt-0.5">
-                  {summary.totalStok > 0 ? ((summary.totalDipilih / summary.totalStok) * 100).toFixed(1) : 0}% dari total
+                  {summary.totalStok > 0 ? ((summary.totalDipilih / summary.totalStok) * 100).toFixed(1) : 0}%
                 </div>
               </div>
-              <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center">
-                <div className="text-2xl font-bold text-green-600">{summary.totalSisa.toLocaleString()}</div>
-                <div className="text-sm text-muted-foreground mt-1">Sisa Stok Tersedia</div>
+              <div className="rounded-lg border border-green-200 bg-green-50 p-3 sm:p-4 text-center">
+                <div className="text-lg sm:text-2xl font-bold text-green-600">{summary.totalSisa.toLocaleString()}</div>
+                <div className="text-xs sm:text-sm text-muted-foreground mt-1">Sisa</div>
                 <div className="text-xs text-green-600 mt-0.5">
-                  {summary.totalStok > 0 ? ((summary.totalSisa / summary.totalStok) * 100).toFixed(1) : 0}% dari total
+                  {summary.totalStok > 0 ? ((summary.totalSisa / summary.totalStok) * 100).toFixed(1) : 0}%
                 </div>
               </div>
             </div>
           )}
 
-          {isLoading ? (
+          <div className="relative mb-4">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Cari perumahan, kecamatan, atau developer..."
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+
+          {isListingsLoading ? (
             <div className="flex items-center justify-center h-40">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div className="rounded-md border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Kecamatan</TableHead>
-                    <TableHead className="text-right">Total Stok</TableHead>
-                    <TableHead className="text-right">Sudah Dipilih</TableHead>
-                    <TableHead className="text-right">Sisa Tersedia</TableHead>
-                    <TableHead className="text-right">% Dipilih</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sorted.map((k) => {
-                    const pct = k.supply > 0 ? ((k.pilihan / k.supply) * 100).toFixed(1) : "0.0";
-                    return (
-                      <TableRow key={k.kodeWilayah}>
-                        <TableCell className="font-medium">{k.namaWilayah}</TableCell>
-                        <TableCell className="text-right font-semibold">{k.supply.toLocaleString()}</TableCell>
-                        <TableCell className="text-right text-yellow-600 font-semibold">{k.pilihan.toLocaleString()}</TableCell>
-                        <TableCell className="text-right text-green-600 font-semibold">{k.sisa.toLocaleString()}</TableCell>
-                        <TableCell className="text-right">
-                          <span className={`text-sm font-medium ${parseFloat(pct) >= 80 ? "text-red-600" : parseFloat(pct) >= 50 ? "text-yellow-600" : "text-green-600"}`}>
-                            {pct}%
-                          </span>
+            <>
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[150px]">Perumahan</TableHead>
+                      <TableHead className="min-w-[90px]">Kecamatan</TableHead>
+                      <TableHead className="text-right min-w-[70px]">Total Stok</TableHead>
+                      <TableHead className="text-right min-w-[80px]">Est. Dipilih</TableHead>
+                      <TableHead className="text-right min-w-[60px]">Sisa</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((l) => {
+                      const pct = l.unit > 0 ? ((l.estPilihan / l.unit) * 100) : 0;
+                      return (
+                        <TableRow key={l.idLokasi}>
+                          <TableCell>
+                            <div className="font-medium text-sm leading-tight">{l.namaPerumahan}</div>
+                            <div className="text-xs text-muted-foreground">{l.namaDeveloper}</div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className="font-normal text-xs">{l.kecamatan}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">{l.unit.toLocaleString()}</TableCell>
+                          <TableCell className="text-right">
+                            <span className={`font-semibold ${pct >= 80 ? "text-red-600" : pct >= 50 ? "text-yellow-600" : "text-blue-600"}`}>
+                              {l.estPilihan.toLocaleString()}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right text-green-600 font-semibold">{l.estSisa.toLocaleString()}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {filtered.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                          Tidak ada data ditemukan
                         </TableCell>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                * "Est. Dipilih" = estimasi proporsional dari data dipilih per kecamatan
+              </p>
+            </>
           )}
-          <p className="text-xs text-muted-foreground mt-3">
-            * "Dipilih" = unit yang dipilih/diminati calon pembeli di SIKUMBANG (bukan transaksi terkonfirmasi)
-          </p>
         </div>
       </DialogContent>
     </Dialog>
@@ -393,51 +386,27 @@ function ClickableStatCard({
   icon: React.ElementType;
   description?: string;
   onClick: () => void;
-  color?: "blue" | "yellow" | "green";
+  color?: "blue";
 }) {
-  const colorMap = {
-    blue: "hover:border-blue-400 hover:bg-blue-50/50",
-    yellow: "hover:border-yellow-400 hover:bg-yellow-50/50",
-    green: "hover:border-green-400 hover:bg-green-50/50",
-  };
-  const iconColorMap = {
-    blue: "text-blue-600",
-    yellow: "text-yellow-600",
-    green: "text-green-600",
-  };
-
   return (
     <Card
-      className={`cursor-pointer transition-all border-2 ${colorMap[color]}`}
+      className="cursor-pointer transition-all border-2 hover:border-blue-400 hover:bg-blue-50/50 active:scale-[0.98]"
       onClick={onClick}
     >
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
         <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <Icon className={`h-4 w-4 ${iconColorMap[color]}`} />
+        <Icon className="h-4 w-4 text-blue-600" />
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 pb-4">
         <div className="text-2xl font-bold">{value}</div>
         {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
-        <p className="text-xs text-blue-500 mt-1 font-medium">Klik untuk detail →</p>
+        <p className="text-xs text-blue-500 mt-1.5 font-medium">Klik untuk detail →</p>
       </CardContent>
     </Card>
   );
 }
 
-function StatCard({ title, value, icon: Icon, description }: { title: string; value: string | number; icon: React.ElementType; description?: string }) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
-      </CardContent>
-    </Card>
-  );
-}
+const CHART_COLORS = ["#3b82f6", "#eab308", "#22c55e", "#f97316", "#8b5cf6"];
 
 export default function Dashboard() {
   const [openModal, setOpenModal] = useState<"lokasi" | "developer" | "stok" | null>(null);
@@ -451,6 +420,8 @@ export default function Dashboard() {
     },
   });
   const { data: kecamatan, isLoading: isKecamatanLoading } = useGetLumajangKecamatan();
+  const { data: allListingsResp } = useGetLumajangListings({ page: 1, limit: 500 });
+  const allListings = (allListingsResp?.data ?? []) as RawListing[];
 
   const isLoading = isSummaryLoading || isKecamatanLoading;
   const isScrapingInProgress = summary?.scraping?.inProgress ?? false;
@@ -460,15 +431,15 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {[...Array(5)].map((_, i) => (
+      <div className="space-y-6 p-1">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[...Array(3)].map((_, i) => (
             <div key={i} className="h-28 bg-muted animate-pulse rounded-xl" />
           ))}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="h-96 bg-muted animate-pulse rounded-xl" />
-          <div className="h-96 bg-muted animate-pulse rounded-xl" />
+          <div className="h-80 bg-muted animate-pulse rounded-xl" />
+          <div className="h-80 bg-muted animate-pulse rounded-xl" />
         </div>
       </div>
     );
@@ -479,7 +450,22 @@ export default function Dashboard() {
   const topKecamatan = [...kecamatan]
     .filter((k) => k.supply > 0)
     .sort((a, b) => b.supply - a.supply)
-    .slice(0, 10);
+    .slice(0, 10)
+    .map((k) => ({
+      name: k.namaWilayah.replace(/^KEC\.?\s*/i, ""),
+      "Total Stok": k.supply,
+      "Sudah Dipilih": k.pilihan,
+    }));
+
+  const topPerumahan = [...allListings]
+    .map((l) => ({
+      name: l.namaPerumahan.length > 22 ? l.namaPerumahan.slice(0, 22) + "…" : l.namaPerumahan,
+      fullName: l.namaPerumahan,
+      "Stok": parseInt(l.jumlahUnit ?? "0", 10) || 0,
+    }))
+    .filter((l) => l["Stok"] > 0)
+    .sort((a, b) => b["Stok"] - a["Stok"])
+    .slice(0, 15);
 
   const pieData = [
     { name: "Dipilih", value: summary.totalDipilih, color: "#eab308" },
@@ -487,28 +473,28 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 p-1">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Ringkasan Eksekutif</h1>
-        <p className="text-muted-foreground mt-1">
-          Status ketersediaan perumahan subsidi di Kabupaten Lumajang — klik kartu untuk detail
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Ringkasan Eksekutif</h1>
+        <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+          Status perumahan subsidi Kabupaten Lumajang — klik kartu untuk detail
         </p>
       </div>
 
       {isScrapingInProgress && (
         <Card className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30">
-          <CardContent className="pt-4 pb-4">
+          <CardContent className="pt-4 pb-4 px-4">
             <div className="flex items-start gap-3">
               <Loader2 className="h-5 w-5 text-blue-600 animate-spin mt-0.5 shrink-0" />
-              <div className="flex-1 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-blue-800">Mengambil data dari SIKUMBANG Tapera...</p>
-                  <span className="text-sm font-bold text-blue-700">{scrapingPct}%</span>
+              <div className="flex-1 space-y-2 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-blue-800 truncate">Mengambil data dari SIKUMBANG Tapera...</p>
+                  <span className="text-sm font-bold text-blue-700 shrink-0">{scrapingPct}%</span>
                 </div>
                 <Progress value={scrapingPct} className="h-2" />
                 <p className="text-xs text-blue-600">
-                  {summary.scraping.pagesScraped.toLocaleString()} dari {summary.scraping.totalPages.toLocaleString()} halaman dipindai
-                  — {summary.totalLokasi} lokasi Lumajang ditemukan
+                  {summary.scraping.pagesScraped.toLocaleString()} dari {summary.scraping.totalPages.toLocaleString()} halaman
+                  — {summary.totalLokasi} lokasi Lumajang
                 </p>
               </div>
             </div>
@@ -516,61 +502,46 @@ export default function Dashboard() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <ClickableStatCard
           title="Total Lokasi"
           value={isScrapingInProgress ? `${summary.totalLokasi}…` : summary.totalLokasi}
           icon={MapPin}
-          description="Lihat peta & daftar"
+          description="Lihat peta & daftar perumahan"
           onClick={() => setOpenModal("lokasi")}
-          color="blue"
         />
         <ClickableStatCard
           title="Total Developer"
           value={summary.totalDeveloper}
           icon={Building}
-          description="Lihat semua developer"
+          description="Lihat semua developer aktif"
           onClick={() => setOpenModal("developer")}
-          color="blue"
         />
         <ClickableStatCard
           title="Total Stok"
           value={summary.totalStok.toLocaleString()}
           icon={Package}
-          description="Lihat rincian per kecamatan"
+          description={`${summary.totalDipilih.toLocaleString()} dipilih · ${summary.totalSisa.toLocaleString()} tersedia`}
           onClick={() => setOpenModal("stok")}
-          color="blue"
-        />
-        <StatCard
-          title="Dipilih / Diminati"
-          value={summary.totalDipilih.toLocaleString()}
-          icon={CheckCircle}
-          description="Unit yang dipilih calon pembeli"
-        />
-        <StatCard
-          title="Sisa Stok"
-          value={summary.totalSisa.toLocaleString()}
-          icon={Clock}
-          description="Unit belum dipilih"
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Supply vs Peminat per Kecamatan (Top 10)</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm sm:text-base">Supply vs Peminat per Kecamatan (Top 10)</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="h-[350px]">
+          <CardContent className="px-2 sm:px-6">
+            <div className="h-[280px] sm:h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topKecamatan} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <BarChart data={topKecamatan} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="namaWilayah" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Legend />
-                  <Bar dataKey="supply" name="Total Stok" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="pilihan" name="Sudah Dipilih" fill="#eab308" radius={[4, 4, 0, 0]} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="Total Stok" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="Sudah Dipilih" fill="#eab308" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -578,19 +549,19 @@ export default function Dashboard() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Proporsi Stok</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm sm:text-base">Proporsi Stok</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col items-center justify-center">
-            <div className="h-[250px] w-full">
+          <CardContent className="flex flex-col items-center">
+            <div className="h-[200px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={pieData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
+                    innerRadius={55}
+                    outerRadius={75}
                     paddingAngle={5}
                     dataKey="value"
                   >
@@ -599,22 +570,59 @@ export default function Dashboard() {
                     ))}
                   </Pie>
                   <Tooltip />
-                  <Legend verticalAlign="bottom" height={36} />
+                  <Legend verticalAlign="bottom" height={30} wrapperStyle={{ fontSize: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="mt-4 text-center w-full">
-              <div className="text-sm font-medium text-muted-foreground">Tingkat Dipilih</div>
-              <div className="text-3xl font-bold mt-1">
+            <div className="mt-2 text-center">
+              <div className="text-xs font-medium text-muted-foreground">Tingkat Dipilih</div>
+              <div className="text-3xl font-bold mt-0.5">
                 {summary.totalStok > 0
                   ? ((summary.totalDipilih / summary.totalStok) * 100).toFixed(1)
                   : "0.0"}%
               </div>
-              <p className="text-xs text-muted-foreground mt-1">dari total stok terdaftar</p>
+              <p className="text-xs text-muted-foreground mt-0.5">dari total stok</p>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {topPerumahan.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm sm:text-base">Stok per Perumahan (Top 15 terbesar)</CardTitle>
+          </CardHeader>
+          <CardContent className="px-2 sm:px-6">
+            <div className="h-[320px] sm:h-[380px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={topPerumahan}
+                  layout="vertical"
+                  margin={{ top: 4, right: 20, left: 8, bottom: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11 }} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    tick={{ fontSize: 10 }}
+                    width={110}
+                  />
+                  <Tooltip
+                    formatter={(val: number) => [val.toLocaleString(), "Unit Stok"]}
+                    labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName ?? ""}
+                  />
+                  <Bar dataKey="Stok" radius={[0, 3, 3, 0]}>
+                    {topPerumahan.map((_, i) => (
+                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <LokasiModal open={openModal === "lokasi"} onClose={() => setOpenModal(null)} />
       <DeveloperModal open={openModal === "developer"} onClose={() => setOpenModal(null)} />
