@@ -59,11 +59,21 @@ export default function Penjualan() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Penjualan Bulanan</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Unit Terdaftar Bulanan</h1>
         <p className="text-muted-foreground mt-1">
-          Rekap unit terjual per developer — {formatMonth(data.bulan)}
+          Rekap unit terdaftar per developer — {formatMonth(data.bulan)}
         </p>
       </div>
+
+      <Card className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30">
+        <CardContent className="pt-4 pb-4">
+          <p className="text-sm text-blue-800 dark:text-blue-200">
+            <strong>Catatan data:</strong> Angka di halaman ini menunjukkan <em>jumlah unit yang terdaftar</em> di SIKUMBANG Tapera,
+            bukan transaksi jual beli yang terkonfirmasi. Data SIKUMBANG bersumber dari pengembang yang submit secara manual —
+            pemantauan perubahan antar periode menunjukkan tren penambahan stok baru oleh developer.
+          </p>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
@@ -140,7 +150,7 @@ export default function Penjualan() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Penjualan per Developer — {formatMonth(data.bulan)}</CardTitle>
+          <CardTitle>Unit Terdaftar per Developer — {formatMonth(data.bulan)}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border">

@@ -32,8 +32,8 @@ export default function Kecamatan() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Distribusi Supply vs Peminat</CardTitle>
-          <CardDescription>Menampilkan kecamatan dengan stok perumahan subsidi</CardDescription>
+          <CardTitle>Distribusi Stok vs Dipilih per Kecamatan</CardTitle>
+          <CardDescription>Stok = unit terdaftar di SIKUMBANG. Dipilih = unit yang diminati calon pembeli (bukan konfirmasi jual).</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="h-[450px]">
@@ -52,7 +52,7 @@ export default function Kecamatan() {
                 <Tooltip />
                 <Legend verticalAlign="top" height={36} />
                 <Bar dataKey="supply" name="Total Stok" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="pilihan" name="Terjual/Pilihan" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="pilihan" name="Dipilih/Peminat" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="sisa" name="Sisa Stok" fill="#22c55e" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -72,9 +72,9 @@ export default function Kecamatan() {
                   <TableHead className="w-[50px]">Peringkat</TableHead>
                   <TableHead>Kecamatan</TableHead>
                   <TableHead className="text-right">Total Stok</TableHead>
-                  <TableHead className="text-right">Terjual</TableHead>
+                  <TableHead className="text-right">Dipilih</TableHead>
                   <TableHead className="text-right">Sisa Stok</TableHead>
-                  <TableHead className="text-right">Tingkat Serapan</TableHead>
+                  <TableHead className="text-right">Tingkat Dipilih</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

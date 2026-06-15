@@ -11,9 +11,11 @@ export interface LumajangSummary {
   totalLokasi: number;
   totalDeveloper: number;
   totalStok: number;
-  totalTerjual: number;
+  /** Jumlah unit yang dipilih/diminati (field pilihan dari SIKUMBANG — bukan transaksi terjual) */
+  totalDipilih: number;
   totalSisa: number;
   totalPeminatan: number;
+  totalUnitFromListings: number;
   lastUpdated: string;
   scraping: ScrapingStatus;
 }

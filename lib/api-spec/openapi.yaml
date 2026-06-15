@@ -29,7 +29,7 @@ paths:
     get:
       operationId: getLumajangSummary
       tags: [lumajang]
-      summary: Ringkasan stok, terjual, dan sisa per kabupaten Lumajang
+      summary: Ringkasan stok, dipilih, dan sisa per kabupaten Lumajang
       responses:
         "200":
           description: Summary data
@@ -161,9 +161,10 @@ components:
         - totalLokasi
         - totalDeveloper
         - totalStok
-        - totalTerjual
+        - totalDipilih
         - totalSisa
         - totalPeminatan
+        - totalUnitFromListings
         - lastUpdated
         - scraping
       properties:
@@ -173,11 +174,14 @@ components:
           type: integer
         totalStok:
           type: integer
-        totalTerjual:
+        totalDipilih:
           type: integer
+          description: Jumlah unit yang dipilih/diminati (field pilihan dari SIKUMBANG — bukan transaksi terjual)
         totalSisa:
           type: integer
         totalPeminatan:
+          type: integer
+        totalUnitFromListings:
           type: integer
         lastUpdated:
           type: string

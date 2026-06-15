@@ -14,7 +14,7 @@ const navItems = [
   { path: "/kecamatan", label: "Analisis Kecamatan", icon: Map },
   { path: "/developer", label: "Data Developer", icon: Users },
   { path: "/listing", label: "Listing Perumahan", icon: Building },
-  { path: "/penjualan", label: "Penjualan Bulanan", icon: TrendingUp },
+  { path: "/penjualan", label: "Unit per Periode", icon: TrendingUp },
 ];
 
 function SidebarContent({ currentLocation }: { currentLocation: string }) {

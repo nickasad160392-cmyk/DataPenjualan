@@ -67,7 +67,7 @@ export default function Dashboard() {
     .slice(0, 10);
 
   const pieData = [
-    { name: "Terjual", value: summary.totalTerjual, color: "#eab308" },
+    { name: "Dipilih", value: summary.totalDipilih, color: "#eab308" },
     { name: "Sisa Stok", value: summary.totalSisa, color: "#22c55e" },
   ];
 
@@ -112,7 +112,7 @@ export default function Dashboard() {
         />
         <StatCard title="Total Developer" value={summary.totalDeveloper} icon={Building} />
         <StatCard title="Total Stok" value={summary.totalStok.toLocaleString()} icon={Package} />
-        <StatCard title="Terjual" value={summary.totalTerjual.toLocaleString()} icon={CheckCircle} />
+        <StatCard title="Dipilih/Peminat" value={summary.totalDipilih.toLocaleString()} icon={CheckCircle} description="Unit yang dipilih (bukan terkonfirmasi terjual)" />
         <StatCard title="Stok Sisa" value={summary.totalSisa.toLocaleString()} icon={Clock} />
       </div>
 
@@ -165,12 +165,13 @@ export default function Dashboard() {
               </ResponsiveContainer>
             </div>
             <div className="mt-4 text-center w-full">
-              <div className="text-sm font-medium text-muted-foreground">Tingkat Penyerapan</div>
+              <div className="text-sm font-medium text-muted-foreground">Tingkat Dipilih</div>
               <div className="text-3xl font-bold mt-1">
                 {summary.totalStok > 0
-                  ? ((summary.totalTerjual / summary.totalStok) * 100).toFixed(1)
+                  ? ((summary.totalDipilih / summary.totalStok) * 100).toFixed(1)
                   : "0.0"}%
               </div>
+              <p className="text-xs text-muted-foreground mt-1">dari total stok</p>
             </div>
           </CardContent>
         </Card>

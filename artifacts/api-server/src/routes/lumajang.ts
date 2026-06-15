@@ -247,6 +247,10 @@ async function runFullScrape(): Promise<ListingItem[]> {
 
   scraping = { inProgress: true, pagesScraped: 0, totalPages: 0, enriching: false, enriched: 0, toEnrich: 0 };
 
+  // Early-stop: hentikan jika sudah N batch berturut-turut tanpa listing Lumajang
+  const MAX_EMPTY_BATCHES = 5;
+  let consecutiveEmptyBatches = 0;
+
   try {
     const first = await fetchPage(1);
     const maxPage = first.maxPage || 1116;
@@ -268,19 +272,38 @@ async function runFullScrape(): Promise<ListingItem[]> {
 
       const settled = await Promise.allSettled(batch.map(fetchPage));
 
+      let foundInBatch = 0;
       for (const r of settled) {
         if (r.status === "fulfilled") {
           for (const l of r.value.listings) {
             if (!seen.has(l.idLokasi)) {
               seen.add(l.idLokasi);
               results.push(l);
+              foundInBatch++;
             }
           }
         }
       }
 
+      if (foundInBatch === 0) {
+        consecutiveEmptyBatches++;
+      } else {
+        consecutiveEmptyBatches = 0;
+      }
+
       scraping.pagesScraped = Math.min(start + CONCURRENT_PAGES - 2, maxPage);
       listingsCache = { data: [...results], fetchedAt: Date.now() };
+
+      // Early stop — jika sudah terlalu banyak batch kosong berturut-turut,
+      // kemungkinan sudah tidak ada lagi listing Lumajang di sisa halaman
+      if (consecutiveEmptyBatches >= MAX_EMPTY_BATCHES) {
+        logger.info(
+          { pagesScraped: scraping.pagesScraped, totalFound: results.length, stoppedEarly: true },
+          `Early stop: ${MAX_EMPTY_BATCHES} batch berturut-turut tanpa listing Lumajang`
+        );
+        scraping.totalPages = scraping.pagesScraped;
+        break;
+      }
     }
 
     listingsCache = { data: results, fetchedAt: Date.now() };
@@ -352,7 +375,7 @@ router.get("/lumajang/summary", async (req, res) => {
       totalLokasi: listings.length,
       totalDeveloper: developerSet.size,
       totalStok,
-      totalTerjual: totalPilihan,
+      totalDipilih: totalPilihan,
       totalSisa,
       totalPeminatan,
       totalUnitFromListings,
