@@ -31,12 +31,27 @@ interface SalesSnapshot {
   kecamatanSales: Record<string, number>;
 }
 
+interface SaleEvent {
+  id: string;
+  recordedAt: string;
+  kecamatanChanges: Array<{
+    namaWilayah: string;
+    kodeWilayah: string;
+    delta: number;
+    newTotal: number;
+    oldTotal: number;
+  }>;
+  totalDelta: number;
+}
+
 let kecamatanCache: CacheEntry<KecamatanRaw[]> | null = null;
 let listingsCache: CacheEntry<ListingItem[]> | null = null;
 let lastRefreshAt: string | null = null;
 let scraping: ScrapingState = { inProgress: false, pagesScraped: 0, totalPages: 0, enriching: false, enriched: 0, toEnrich: 0 };
 let scrapePromise: Promise<ListingItem[]> | null = null;
 let salesSnapshots: SalesSnapshot[] = [];
+let saleEvents: SaleEvent[] = [];
+const prevKecamatanPilihan = new Map<string, { namaWilayah: string; pilihan: number }>();
 
 interface KecamatanRaw {
   kodeWilayah: string;
@@ -241,6 +256,51 @@ function recordSalesSnapshot(listings: ListingItem[]): void {
   }
 }
 
+function snapshotKecamatanPilihan(): void {
+  if (!kecamatanCache) return;
+  prevKecamatanPilihan.clear();
+  for (const k of kecamatanCache.data) {
+    prevKecamatanPilihan.set(k.kodeWilayah, { namaWilayah: k.namaWilayah, pilihan: k.pilihan || 0 });
+  }
+}
+
+async function detectSaleEvents(): Promise<void> {
+  if (prevKecamatanPilihan.size === 0) return;
+  let newData: KecamatanRaw[];
+  try {
+    kecamatanCache = null;
+    newData = await fetchKecamatanData();
+  } catch {
+    prevKecamatanPilihan.clear();
+    return;
+  }
+  const changes: SaleEvent["kecamatanChanges"] = [];
+  for (const k of newData) {
+    const prev = prevKecamatanPilihan.get(k.kodeWilayah);
+    const curr = k.pilihan || 0;
+    if (prev !== undefined && curr > prev.pilihan) {
+      changes.push({
+        namaWilayah: k.namaWilayah,
+        kodeWilayah: k.kodeWilayah,
+        delta: curr - prev.pilihan,
+        newTotal: curr,
+        oldTotal: prev.pilihan,
+      });
+    }
+  }
+  prevKecamatanPilihan.clear();
+  if (changes.length === 0) return;
+  const event: SaleEvent = {
+    id: `sale-${Date.now()}`,
+    recordedAt: new Date().toISOString(),
+    kecamatanChanges: changes,
+    totalDelta: changes.reduce((s, c) => s + c.delta, 0),
+  };
+  saleEvents.unshift(event);
+  if (saleEvents.length > 200) saleEvents = saleEvents.slice(0, 200);
+  logger.info({ totalDelta: event.totalDelta, affected: changes.length }, "Sale events recorded");
+}
+
 async function runFullScrape(): Promise<ListingItem[]> {
   const results: ListingItem[] = [];
   const seen = new Set<string>();
@@ -314,6 +374,7 @@ async function runFullScrape(): Promise<ListingItem[]> {
       enrichListings(results)
         .then(() => {
           recordSalesSnapshot(results);
+          return detectSaleEvents();
         })
         .catch((err) => logger.error({ err }, "Enrichment failed"));
     });
@@ -554,6 +615,14 @@ router.get("/lumajang/penjualan-bulanan", async (req, res) => {
   }
 });
 
+router.get("/lumajang/sale-events", (_req, res) => {
+  res.json({
+    events: saleEvents,
+    totalUnits: saleEvents.reduce((s, e) => s + e.totalDelta, 0),
+    count: saleEvents.length,
+  });
+});
+
 router.get("/lumajang/photo-proxy", async (req: Request, res: Response) => {
   try {
     const rawUrl = req.query.url as string;
@@ -602,6 +671,7 @@ router.post("/lumajang/refresh", async (req, res) => {
       });
     }
 
+    snapshotKecamatanPilihan();
     kecamatanCache = null;
     listingsCache = null;
 

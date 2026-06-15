@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { Building, Map, Users, LayoutDashboard, RefreshCw, Menu, TrendingUp } from "lucide-react";
+import { LayoutDashboard, TrendingUp, RefreshCw, Menu } from "lucide-react";
 import { useRefreshLumajangData, useGetLumajangSummary, getGetLumajangSummaryQueryKey, getGetLumajangKecamatanQueryKey, getGetLumajangDevelopersQueryKey, getGetLumajangListingsQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -11,10 +11,7 @@ import { id } from "date-fns/locale";
 
 const navItems = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
-  { path: "/kecamatan", label: "Analisis Kecamatan", icon: Map },
-  { path: "/developer", label: "Data Developer", icon: Users },
-  { path: "/listing", label: "Listing Perumahan", icon: Building },
-  { path: "/penjualan", label: "Unit per Periode", icon: TrendingUp },
+  { path: "/penjualan-realtime", label: "Penjualan Realtime", icon: TrendingUp },
 ];
 
 function SidebarContent({ currentLocation }: { currentLocation: string }) {
@@ -65,7 +62,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: summary } = useGetLumajangSummary();
-  
+
   const refreshMutation = useRefreshLumajangData({
     mutation: {
       onSuccess: () => {
@@ -74,8 +71,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         queryClient.invalidateQueries({ queryKey: getGetLumajangDevelopersQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetLumajangListingsQueryKey() });
         toast({
-          title: "Data berhasil diperbarui",
-          description: "Data terbaru telah diambil dari SIKUMBANG Tapera.",
+          title: "Refresh dimulai",
+          description: "Data sedang diambil dari SIKUMBANG. Penjualan baru akan tercatat otomatis.",
         });
       },
       onError: () => {
@@ -92,7 +89,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background flex w-full">
-      {/* Desktop Sidebar */}
       <div className="hidden md:flex w-64 flex-col fixed inset-y-0 z-50">
         <SidebarContent currentLocation={location} />
       </div>
@@ -110,9 +106,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <SidebarContent currentLocation={location} />
               </SheetContent>
             </Sheet>
-            
+
             <div className="hidden sm:block">
-              {summary && summary.lastUpdated && (
+              {summary?.lastUpdated && (
                 <p className="text-sm text-muted-foreground">
                   Terakhir diperbarui: {format(new Date(summary.lastUpdated), "dd MMM yyyy, HH:mm", { locale: id })}
                 </p>

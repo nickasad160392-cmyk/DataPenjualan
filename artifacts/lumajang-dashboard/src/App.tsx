@@ -5,10 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { Layout } from "@/components/layout";
 import Dashboard from "@/pages/dashboard";
-import Kecamatan from "@/pages/kecamatan";
-import Developer from "@/pages/developer";
-import Listing from "@/pages/listing";
-import Penjualan from "@/pages/penjualan";
+import PenjualanRealtime from "@/pages/penjualan-realtime";
 
 const queryClient = new QueryClient();
 
@@ -17,10 +14,7 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={Dashboard} />
-        <Route path="/kecamatan" component={Kecamatan} />
-        <Route path="/developer" component={Developer} />
-        <Route path="/listing" component={Listing} />
-        <Route path="/penjualan" component={Penjualan} />
+        <Route path="/penjualan-realtime" component={PenjualanRealtime} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
